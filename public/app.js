@@ -132,6 +132,110 @@ function downloadHref(file) {
   return `/api/download?${params.toString()}`;
 }
 
+function safeFilename(name) {
+  return String(name || "solicitud")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9-_ ]+/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .slice(0, 60);
+}
+
+async function imageToDataUrl(file) {
+  try {
+    const res = await fetch(downloadHref(file));
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function downloadSubmissionPdf(sub) {
+  if (!window.html2pdf) {
+    alert("No se pudo cargar el generador de PDF. Recarga la página.");
+    return;
+  }
+
+  const title = submissionTitle(sub);
+  const files = submissionFiles(sub);
+  const imageData = [];
+  for (const file of files) {
+    const dataUrl = await imageToDataUrl(file);
+    imageData.push({ ...file, dataUrl });
+  }
+
+  const root = document.createElement("div");
+  root.className = "pdf-root";
+  root.innerHTML = `
+    <div class="pdf-eyebrow">Mercadotecnia · Lonas</div>
+    <h1>${escapeHtml(title)}</h1>
+    <p class="pdf-meta">Enviada el ${escapeHtml(formatDate(sub.submissionTime))} · ID ${escapeHtml(sub.submissionId)}</p>
+
+    ${
+      imageData.length
+        ? `<h2>Imágenes adjuntas</h2>
+           <div class="pdf-images">
+             ${imageData
+               .map(
+                 (file) => `
+               <div class="pdf-image-card">
+                 ${
+                   file.dataUrl
+                     ? `<img src="${file.dataUrl}" alt="${escapeHtml(file.questionName)}" />`
+                     : `<div style="height:180px;display:grid;place-items:center;background:#f3f8fc;color:#6b7f96;font-size:12px;">Sin vista previa</div>`
+                 }
+                 <p><strong>${escapeHtml(file.questionName)}</strong><br>${escapeHtml(file.filename || "Archivo")}</p>
+               </div>`,
+               )
+               .join("")}
+           </div>`
+        : ""
+    }
+
+    <h2>Respuestas</h2>
+    <dl>
+      ${sub.questions
+        .map((question, index) => {
+          const value = isFileQuestion(question.type)
+            ? extractFiles(question.value)
+                .map((f) => f.filename || "Archivo")
+                .join(", ") || "Sin archivo"
+            : formatQuestionValue(question);
+          return `<div class="pdf-field" style="${index % 2 === 1 ? "border-left-color:#ff6b2c" : ""}">
+            <dt>${escapeHtml(cleanLabel(question.name))}</dt>
+            <dd>${escapeHtml(value)}</dd>
+          </div>`;
+        })
+        .join("")}
+    </dl>
+  `;
+
+  document.body.appendChild(root);
+
+  const opt = {
+    margin: [8, 8, 8, 8],
+    filename: `solicitud-${safeFilename(title)}.pdf`,
+    image: { type: "jpeg", quality: 0.96 },
+    html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+    jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+    pagebreak: { mode: ["css", "legacy"] },
+  };
+
+  try {
+    await window.html2pdf().set(opt).from(root).save();
+  } finally {
+    root.remove();
+  }
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -282,9 +386,14 @@ function render() {
               </div>`
             : `
               <div class="detail-header">
-                <p class="eyebrow">Detalle</p>
-                <h2>${escapeHtml(submissionTitle(selected))}</h2>
-                <p class="meta">Enviada el ${escapeHtml(formatDate(selected.submissionTime))} · ID <code>${escapeHtml(selected.submissionId)}</code></p>
+                <div class="detail-header-copy">
+                  <p class="eyebrow">Detalle</p>
+                  <h2>${escapeHtml(submissionTitle(selected))}</h2>
+                  <p class="meta">Enviada el ${escapeHtml(formatDate(selected.submissionTime))} · ID <code>${escapeHtml(selected.submissionId)}</code></p>
+                </div>
+                <button type="button" class="pdf-btn" data-action="download-pdf" data-id="${escapeHtml(selected.submissionId)}">
+                  Descargar PDF
+                </button>
               </div>
 
               ${
@@ -410,6 +519,28 @@ function render() {
       if (state.live) load(false);
       else clearTimeout(pollTimer);
       render();
+    });
+  });
+
+  root.querySelectorAll("[data-action='download-pdf']").forEach((el) => {
+    el.addEventListener("click", async () => {
+      const id = el.getAttribute("data-id");
+      const sub = (state.data?.responses || []).find(
+        (item) => item.submissionId === id,
+      );
+      if (!sub) return;
+      const original = el.textContent;
+      el.disabled = true;
+      el.textContent = "Generando PDF…";
+      try {
+        await downloadSubmissionPdf(sub);
+      } catch (error) {
+        console.error(error);
+        alert("No se pudo generar el PDF. Intenta de nuevo.");
+      } finally {
+        el.disabled = false;
+        el.textContent = original || "Descargar PDF";
+      }
     });
   });
 
