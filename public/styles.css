@@ -393,97 +393,305 @@ pre {
   left: -10000px;
   top: 0;
   width: 794px;
-  background: #fff;
+  background: #eef5f8;
   color: #10233a;
   font-family: "Plus Jakarta Sans", sans-serif;
-  padding: 36px 40px;
+  padding: 18px;
 }
 
-.pdf-root h1 {
-  margin: 0.2rem 0 0;
-  font-size: 28px;
-  letter-spacing: -0.03em;
+.pdf-sheet {
+  background: #ffffff;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid #d7e4f0;
+  box-shadow: 0 18px 40px rgba(16, 35, 58, 0.08);
 }
 
-.pdf-root .pdf-eyebrow {
-  display: inline-block;
-  background: #d8f6f4;
-  color: #007f84;
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.pdf-hero {
+  padding: 28px 28px 22px;
+  background:
+    radial-gradient(500px 220px at 0% 0%, rgba(0, 168, 168, 0.18), transparent 60%),
+    radial-gradient(420px 200px at 100% 0%, rgba(255, 107, 44, 0.16), transparent 55%),
+    linear-gradient(180deg, #f7fbfd 0%, #ffffff 100%);
+  border-bottom: 1px solid #e4eef6;
 }
 
-.pdf-root .pdf-meta {
-  color: #6b7f96;
-  margin: 8px 0 22px;
-  font-size: 12px;
+.pdf-hero-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 18px;
 }
 
-.pdf-root h2 {
-  margin: 22px 0 10px;
+.pdf-brand {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.pdf-brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #00a8a8, #007f84);
+  color: #fff;
+  font-weight: 800;
   font-size: 16px;
 }
 
-.pdf-root .pdf-field {
+.pdf-brand strong,
+.pdf-brand span {
+  display: block;
+}
+
+.pdf-brand strong {
+  font-size: 13px;
+  letter-spacing: -0.02em;
+}
+
+.pdf-brand span {
+  font-size: 11px;
+  color: #6b7f96;
+}
+
+.pdf-doc-badge {
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: #ffe4d6;
+  color: #c2410c;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 107, 44, 0.25);
+}
+
+.pdf-hero h1 {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  color: #10233a;
+}
+
+.pdf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.pdf-chips span {
   display: grid;
-  grid-template-columns: 38% 1fr;
-  gap: 10px;
+  gap: 2px;
+  min-width: 140px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
   border: 1px solid #d7e4f0;
-  border-left: 4px solid #00a8a8;
-  border-radius: 10px;
-  padding: 10px 12px;
-  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #3d526a;
+}
+
+.pdf-chips em {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #00a8a8;
+}
+
+.pdf-block {
+  padding: 18px 28px 8px;
   page-break-inside: avoid;
 }
 
-.pdf-root .pdf-field:nth-child(even) {
-  border-left-color: #ff6b2c;
+.pdf-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed #d7e4f0;
 }
 
-.pdf-root .pdf-field dt {
-  color: #6b7f96;
+.pdf-block-head h2 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pdf-block-head > span {
   font-size: 11px;
+  color: #6b7f96;
   font-weight: 600;
 }
 
-.pdf-root .pdf-field dd {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 500;
-  color: #3d526a;
-  word-break: break-word;
+.pdf-lona-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: #d8f6f4;
+  color: #007f84;
+  font-size: 11px;
+  font-weight: 800;
 }
 
-.pdf-root .pdf-images {
+.pdf-lona.alt .pdf-lona-pill {
+  background: #ffe4d6;
+  color: #c2410c;
+}
+
+.pdf-lona {
+  margin: 8px 20px 12px;
+  padding: 14px 16px 6px;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 168, 168, 0.22);
+  background: linear-gradient(180deg, rgba(216, 246, 244, 0.45), #fff);
+}
+
+.pdf-lona.alt {
+  border-color: rgba(255, 107, 44, 0.22);
+  background: linear-gradient(180deg, rgba(255, 228, 214, 0.45), #fff);
+}
+
+.pdf-table {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 0;
+  border: 1px solid #d7e4f0;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 12px;
 }
 
-.pdf-root .pdf-image-card {
-  border: 1px solid #d7e4f0;
-  border-radius: 12px;
-  overflow: hidden;
+.pdf-row {
+  display: grid;
+  grid-template-columns: 42% 1fr;
+  gap: 0;
+  border-bottom: 1px solid #e8f0f6;
   page-break-inside: avoid;
 }
 
-.pdf-root .pdf-image-card img {
+.pdf-row:last-child {
+  border-bottom: 0;
+}
+
+.pdf-row:nth-child(odd) {
+  background: #f8fbfd;
+}
+
+.pdf-row:nth-child(even) {
+  background: #ffffff;
+}
+
+.pdf-label,
+.pdf-value {
+  padding: 10px 12px;
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.pdf-label {
+  color: #6b7f96;
+  font-weight: 700;
+  border-right: 1px solid #e8f0f6;
+}
+
+.pdf-value {
+  color: #10233a;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.pdf-images {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.pdf-image-card {
+  border: 1px solid #d7e4f0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+  page-break-inside: avoid;
+}
+
+.pdf-image-card img,
+.pdf-image-empty {
   width: 100%;
-  height: 180px;
+  height: 190px;
   object-fit: contain;
   background: #f3f8fc;
   display: block;
 }
 
-.pdf-root .pdf-image-card p {
-  margin: 0;
-  padding: 8px 10px;
+.pdf-image-empty {
+  display: grid;
+  place-items: center;
+  color: #6b7f96;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pdf-image-meta {
+  padding: 10px 12px;
+  border-top: 1px solid #e8f0f6;
+}
+
+.pdf-image-meta strong,
+.pdf-image-meta span {
+  display: block;
+}
+
+.pdf-image-meta strong {
+  font-size: 11px;
+  color: #10233a;
+}
+
+.pdf-image-meta span {
+  margin-top: 2px;
+  font-size: 10px;
+  color: #6b7f96;
+}
+
+.pdf-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 8px;
+  padding: 16px 28px 22px;
+  border-top: 1px solid #e4eef6;
+  background: #f7fbfd;
+}
+
+.pdf-footer strong,
+.pdf-footer span {
+  display: block;
+}
+
+.pdf-footer strong {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #00a8a8;
+  margin-bottom: 2px;
+}
+
+.pdf-footer span {
   font-size: 11px;
   color: #3d526a;
+  font-weight: 600;
+  word-break: break-all;
 }
 
 .meta {

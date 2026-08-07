@@ -265,7 +265,7 @@ function renderGroupedAnswers(questions) {
 
 function renderPdfFieldRows(questions, { stripLonaLabel = false } = {}) {
   return questions
-    .map((question, index) => {
+    .map((question) => {
       const value = isFileQuestion(question.type)
         ? extractFiles(question.value)
             .map((f) => f.filename || "Archivo")
@@ -274,9 +274,9 @@ function renderPdfFieldRows(questions, { stripLonaLabel = false } = {}) {
       const label = stripLonaLabel
         ? cleanLonaLabel(question.name)
         : cleanLabel(question.name);
-      return `<div class="pdf-field" style="${index % 2 === 1 ? "border-left-color:#ff6b2c" : ""}">
-        <dt>${escapeHtml(label)}</dt>
-        <dd>${escapeHtml(value)}</dd>
+      return `<div class="pdf-row">
+        <div class="pdf-label">${escapeHtml(label)}</div>
+        <div class="pdf-value">${escapeHtml(value)}</div>
       </div>`;
     })
     .join("");
@@ -307,60 +307,122 @@ async function downloadSubmissionPdf(sub) {
   const title = submissionTitle(sub);
   const files = submissionFiles(sub);
   const { general, lonas } = groupQuestions(sub.questions);
+  const cantidad = getQuestionByHint(sub.questions, ["cantidad de lonas"]);
+  const ejecutivo = getQuestionByHint(sub.questions, ["ejecutivo de ventas"]);
+  const yaavser = getQuestionByHint(sub.questions, ["nombre completo del yaavser"]);
   const imageData = [];
   for (const file of files) {
     const dataUrl = await imageToDataUrl(file);
     imageData.push({ ...file, dataUrl });
   }
 
+  const generatedAt = formatDate(new Date().toISOString());
   const root = document.createElement("div");
   root.className = "pdf-root";
   root.innerHTML = `
-    <div class="pdf-eyebrow">Mercadotecnia · Lonas</div>
-    <h1>${escapeHtml(title)}</h1>
-    <p class="pdf-meta">Enviada el ${escapeHtml(formatDate(sub.submissionTime))} · ID ${escapeHtml(sub.submissionId)}</p>
+    <div class="pdf-sheet">
+      <header class="pdf-hero">
+        <div class="pdf-hero-top">
+          <div class="pdf-brand">
+            <span class="pdf-brand-mark">Y</span>
+            <div>
+              <strong>YAAVS Mercadotecnia</strong>
+              <span>Solicitud de diseño y producción de lona</span>
+            </div>
+          </div>
+          <div class="pdf-doc-badge">Documento oficial</div>
+        </div>
+        <h1>${escapeHtml(title)}</h1>
+        <div class="pdf-chips">
+          <span><em>Enviada</em>${escapeHtml(formatDate(sub.submissionTime))}</span>
+          <span><em>Lonas</em>${escapeHtml(
+            cantidad ? formatQuestionValue(cantidad) : lonas.length || "1",
+          )}</span>
+          <span><em>Ejecutivo</em>${escapeHtml(
+            ejecutivo ? formatQuestionValue(ejecutivo) : "—",
+          )}</span>
+          <span><em>YAAVSER</em>${escapeHtml(
+            yaavser ? formatQuestionValue(yaavser) : "—",
+          )}</span>
+        </div>
+      </header>
 
-    ${
-      imageData.length
-        ? `<h2>Imágenes adjuntas</h2>
-           <div class="pdf-images">
-             ${imageData
-               .map(
-                 (file) => `
-               <div class="pdf-image-card">
-                 ${
-                   file.dataUrl
-                     ? `<img src="${file.dataUrl}" alt="${escapeHtml(file.questionName)}" />`
-                     : `<div style="height:180px;display:grid;place-items:center;background:#f3f8fc;color:#6b7f96;font-size:12px;">Sin vista previa</div>`
-                 }
-                 <p><strong>${escapeHtml(file.questionName)}</strong><br>${escapeHtml(file.filename || "Archivo")}</p>
-               </div>`,
-               )
-               .join("")}
-           </div>`
-        : ""
-    }
+      ${
+        imageData.length
+          ? `<section class="pdf-block">
+              <div class="pdf-block-head">
+                <h2>Imágenes adjuntas</h2>
+                <span>${imageData.length} archivo${imageData.length === 1 ? "" : "s"}</span>
+              </div>
+              <div class="pdf-images">
+                ${imageData
+                  .map(
+                    (file) => `
+                  <article class="pdf-image-card">
+                    ${
+                      file.dataUrl
+                        ? `<img src="${file.dataUrl}" alt="${escapeHtml(file.questionName)}" />`
+                        : `<div class="pdf-image-empty">Sin vista previa</div>`
+                    }
+                    <div class="pdf-image-meta">
+                      <strong>${escapeHtml(file.questionName)}</strong>
+                      <span>${escapeHtml(file.filename || "Archivo")}</span>
+                    </div>
+                  </article>`,
+                  )
+                  .join("")}
+              </div>
+            </section>`
+          : ""
+      }
 
-    <h2>Respuestas generales</h2>
-    <dl>${renderPdfFieldRows(general)}</dl>
+      <section class="pdf-block">
+        <div class="pdf-block-head">
+          <h2>Información general</h2>
+          <span>${general.length} campos</span>
+        </div>
+        <div class="pdf-table">${renderPdfFieldRows(general)}</div>
+      </section>
 
-    ${lonas
-      .map(
-        (group) => `
-      <h2>Lona ${group.number}</h2>
-      <dl>${renderPdfFieldRows(group.questions, { stripLonaLabel: true })}</dl>
-    `,
-      )
-      .join("")}
+      ${lonas
+        .map(
+          (group, index) => `
+        <section class="pdf-block pdf-lona ${index % 2 === 1 ? "alt" : ""}">
+          <div class="pdf-block-head">
+            <h2><span class="pdf-lona-pill">Lona ${group.number}</span> Especificaciones</h2>
+            <span>${group.questions.length} campos</span>
+          </div>
+          <div class="pdf-table">${renderPdfFieldRows(group.questions, {
+            stripLonaLabel: true,
+          })}</div>
+        </section>`,
+        )
+        .join("")}
+
+      <footer class="pdf-footer">
+        <div>
+          <strong>ID de solicitud</strong>
+          <span>${escapeHtml(sub.submissionId)}</span>
+        </div>
+        <div>
+          <strong>Generado</strong>
+          <span>${escapeHtml(generatedAt)}</span>
+        </div>
+      </footer>
+    </div>
   `;
 
   document.body.appendChild(root);
 
   const opt = {
-    margin: [8, 8, 8, 8],
+    margin: [6, 6, 6, 6],
     filename: `solicitud-${safeFilename(title)}.pdf`,
-    image: { type: "jpeg", quality: 0.96 },
-    html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+    image: { type: "jpeg", quality: 0.98 },
+    html2canvas: {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#eef5f8",
+    },
     jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
     pagebreak: { mode: ["css", "legacy"] },
   };
