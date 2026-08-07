@@ -263,226 +263,29 @@ function renderGroupedAnswers(questions) {
   `;
 }
 
-function renderPdfFieldRows(questions, { stripLonaLabel = false } = {}) {
-  return questions
-    .map((question) => {
-      const value = isFileQuestion(question.type)
-        ? extractFiles(question.value)
-            .map((f) => f.filename || "Archivo")
-            .join(", ") || "Sin archivo"
-        : formatQuestionValue(question);
-      const label = stripLonaLabel
-        ? cleanLonaLabel(question.name)
-        : cleanLabel(question.name);
-      return `<div class="pdf-row">
-        <div class="pdf-label">${escapeHtml(label)}</div>
-        <div class="pdf-value">${escapeHtml(value)}</div>
-      </div>`;
-    })
-    .join("");
-}
-
-async function imageToDataUrl(file) {
-  try {
-    const res = await fetch(downloadHref(file));
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
-}
-
 async function downloadSubmissionPdf(sub) {
-  if (!window.html2pdf) {
-    alert("No se pudo cargar el generador de PDF. Recarga la página.");
-    return;
-  }
-
   const title = submissionTitle(sub);
-  const files = submissionFiles(sub);
-  const { general, lonas } = groupQuestions(sub.questions);
-  const cantidad = getQuestionByHint(sub.questions, ["cantidad de lonas"]);
-  const ejecutivo = getQuestionByHint(sub.questions, ["ejecutivo de ventas"]);
-  const yaavser = getQuestionByHint(sub.questions, ["nombre completo del yaavser"]);
-  const imageData = [];
-  for (const file of files) {
-    const dataUrl = await imageToDataUrl(file);
-    imageData.push({ ...file, dataUrl });
-  }
-
-  const generatedAt = formatDate(new Date().toISOString());
-  const root = document.createElement("div");
-  root.className = "pdf-root";
-  root.innerHTML = `
-    <div class="pdf-sheet">
-      <header class="pdf-hero">
-        <div class="pdf-hero-top">
-          <div class="pdf-brand">
-            <span class="pdf-brand-mark">Y</span>
-            <div>
-              <strong>YAAVS Mercadotecnia</strong>
-              <span>Solicitud de diseño y producción de lona</span>
-            </div>
-          </div>
-          <div class="pdf-doc-badge">Documento oficial</div>
-        </div>
-        <h1>${escapeHtml(title)}</h1>
-        <div class="pdf-chips">
-          <span><em>Enviada</em>${escapeHtml(formatDate(sub.submissionTime))}</span>
-          <span><em>Lonas</em>${escapeHtml(
-            cantidad ? formatQuestionValue(cantidad) : lonas.length || "1",
-          )}</span>
-          <span><em>Ejecutivo</em>${escapeHtml(
-            ejecutivo ? formatQuestionValue(ejecutivo) : "—",
-          )}</span>
-          <span><em>YAAVSER</em>${escapeHtml(
-            yaavser ? formatQuestionValue(yaavser) : "—",
-          )}</span>
-        </div>
-      </header>
-
-      ${
-        imageData.length
-          ? `<section class="pdf-block">
-              <div class="pdf-block-head">
-                <h2>Imágenes adjuntas</h2>
-                <span>${imageData.length} archivo${imageData.length === 1 ? "" : "s"}</span>
-              </div>
-              <div class="pdf-images">
-                ${imageData
-                  .map(
-                    (file) => `
-                  <article class="pdf-image-card">
-                    ${
-                      file.dataUrl
-                        ? `<img src="${file.dataUrl}" alt="${escapeHtml(file.questionName)}" />`
-                        : `<div class="pdf-image-empty">Sin vista previa</div>`
-                    }
-                    <div class="pdf-image-meta">
-                      <strong>${escapeHtml(file.questionName)}</strong>
-                      <span>${escapeHtml(file.filename || "Archivo")}</span>
-                    </div>
-                  </article>`,
-                  )
-                  .join("")}
-              </div>
-            </section>`
-          : ""
-      }
-
-      <section class="pdf-block">
-        <div class="pdf-block-head">
-          <h2>Información general</h2>
-          <span>${general.length} campos</span>
-        </div>
-        <div class="pdf-table">${renderPdfFieldRows(general)}</div>
-      </section>
-
-      ${lonas
-        .map(
-          (group, index) => `
-        <section class="pdf-block pdf-lona ${index % 2 === 1 ? "alt" : ""}">
-          <div class="pdf-block-head">
-            <h2><span class="pdf-lona-pill">Lona ${group.number}</span> Especificaciones</h2>
-            <span>${group.questions.length} campos</span>
-          </div>
-          <div class="pdf-table">${renderPdfFieldRows(group.questions, {
-            stripLonaLabel: true,
-          })}</div>
-        </section>`,
-        )
-        .join("")}
-
-      <footer class="pdf-footer">
-        <div>
-          <strong>ID de solicitud</strong>
-          <span>${escapeHtml(sub.submissionId)}</span>
-        </div>
-        <div>
-          <strong>Generado</strong>
-          <span>${escapeHtml(generatedAt)}</span>
-        </div>
-      </footer>
-    </div>
-  `;
-
-  document.body.appendChild(root);
-
-  const images = [...root.querySelectorAll("img")];
-  await Promise.all(
-    images.map(
-      (img) =>
-        img.complete
-          ? Promise.resolve()
-          : new Promise((resolve) => {
-              img.onload = resolve;
-              img.onerror = resolve;
-            }),
-    ),
-  );
-
-  if (document.fonts?.ready) {
-    await document.fonts.ready;
-  }
-  await new Promise((resolve) => setTimeout(resolve, 120));
-
-  const opt = {
-    margin: [6, 6, 6, 6],
-    filename: `solicitud-${safeFilename(title)}.pdf`,
-    image: { type: "jpeg", quality: 0.98 },
-    html2canvas: {
-      scale: 1.5,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: "#eef5f8",
-      logging: false,
-      scrollX: 0,
-      scrollY: 0,
-      windowWidth: 794,
-      onclone(doc) {
-        const cloned = doc.querySelector(".pdf-root");
-        if (cloned) {
-          cloned.style.opacity = "1";
-          cloned.style.left = "0";
-          cloned.style.top = "0";
-          cloned.style.position = "static";
-        }
-      },
-    },
-    jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-    pagebreak: { mode: ["css", "legacy"] },
-  };
-
-  try {
-    const worker = window.html2pdf().set(opt).from(root);
-    await worker.save();
-  } catch (error) {
-    console.error(error);
-    // Fallback: abrir vista imprimible si html2pdf falla
-    const win = window.open("", "_blank", "noopener,noreferrer,width=900,height=1000");
-    if (win) {
-      win.document.write(`<!doctype html><html><head><title>${escapeHtml(title)}</title>
-        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-        <link rel="stylesheet" href="/styles.css?v=20260807g">
-        <style>
-          body{background:#eef5f8;margin:0;padding:18px;}
-          .pdf-root{position:static;opacity:1;left:auto;top:auto;width:auto;max-width:794px;margin:0 auto;}
-          @media print{body{background:#fff;padding:0}.pdf-root{padding:0}}
-        </style>
-      </head><body>${root.innerHTML}<script>window.onload=()=>setTimeout(()=>window.print(),400)<\\/script></body></html>`);
-      win.document.close();
-    } else {
-      throw error;
+  const res = await fetch(`/api/pdf/${encodeURIComponent(sub.submissionId)}`);
+  if (!res.ok) {
+    let message = "No se pudo generar el PDF";
+    try {
+      const data = await res.json();
+      if (data?.error) message = data.error;
+    } catch {
+      // ignore
     }
-  } finally {
-    root.remove();
+    throw new Error(message);
   }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `solicitud-${safeFilename(title)}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function updateLiveMeta() {

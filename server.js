@@ -5,6 +5,7 @@ const express = require("express");
 const {
   fetchAllSubmissions,
 } = require("./lib/fillout");
+const { buildSubmissionPdf } = require("./lib/pdf");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -79,6 +80,32 @@ app.get("/api/download", async (req, res) => {
     res.send(buffer);
   } catch {
     res.status(502).json({ error: "Error al descargar el archivo" });
+  }
+});
+
+app.get("/api/pdf/:submissionId", async (req, res) => {
+  try {
+    const data = await fetchAllSubmissions();
+    const sub = (data.responses || []).find(
+      (item) => item.submissionId === req.params.submissionId,
+    );
+    if (!sub) {
+      return res.status(404).json({ error: "Solicitud no encontrada" });
+    }
+
+    const { buffer, filename } = await buildSubmissionPdf(sub);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
+    res.setHeader("Cache-Control", "no-store");
+    res.send(buffer);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "No se pudo generar el PDF",
+    });
   }
 });
 
