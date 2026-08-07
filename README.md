@@ -1,42 +1,29 @@
-# Panel de respuestas · Formulario de lonas
+# Panel de respuestas · Lonas
 
-Visualiza en tiempo real las respuestas de:
-https://forms.fillout.com/t/9LnZ4jfJXnus
+Panel en tiempo real para el formulario Fillout de solicitudes de lonas.
 
-## Qué incluye
-
-- Listado de solicitudes con búsqueda
-- Detalle completo de cada respuesta
-- Vista ampliada de imágenes adjuntas (logotipo / referencias)
-- Descarga de imágenes
-- Actualización automática cada 5 segundos (botón En vivo / Pausado)
-
-## Configuración
-
-1. Obtén tu API key en [Fillout → Settings → Developer](https://build.fillout.com/home/settings/developer)
-2. Copia el archivo de entorno:
+## Local
 
 ```bash
 cp .env.example .env.local
-```
-
-3. Edita `.env.local` y pega tu API key:
-
-```
-FILLOUT_API_KEY=tu_api_key_aqui
-FILLOUT_FORM_ID=9LnZ4jfJXnus
-```
-
-4. Instala y arranca:
-
-```bash
+# pega FILLOUT_API_KEY
 npm install
-npm run dev
+npm start
 ```
 
-5. Abre [http://localhost:3000](http://localhost:3000)
+Abre http://localhost:3000
 
-## Notas
+## Hostinger (Node.js)
 
-- La API key se queda solo en el servidor (nunca se expone al navegador).
-- El enlace `build.fillout.com/join/...` es una invitación de colaboración a Fillout/Zite; este panel es la vista operativa de respuestas para Mercadotecnia.
+1. Repositorio: `panel-respuestas-lonas`
+2. Rama: `main`
+3. **Estructura / framework:** Node.js (no Next.js)
+4. **Archivo de inicio:** `server.js`
+5. **Build:** `npm install` (o vacío)
+6. **Start:** `npm start`
+7. **Node.js:** 20.x (o 18.x)
+8. Variables de entorno:
+   - `FILLOUT_API_KEY=...`
+   - `FILLOUT_FORM_ID=9LnZ4jfJXnus`
+
+Si Hostinger sigue detectando Next.js, fuerza el framework a Node.js / Custom y usa `server.js` como entrada.
