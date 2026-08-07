@@ -414,21 +414,72 @@ async function downloadSubmissionPdf(sub) {
 
   document.body.appendChild(root);
 
+  const images = [...root.querySelectorAll("img")];
+  await Promise.all(
+    images.map(
+      (img) =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise((resolve) => {
+              img.onload = resolve;
+              img.onerror = resolve;
+            }),
+    ),
+  );
+
+  if (document.fonts?.ready) {
+    await document.fonts.ready;
+  }
+  await new Promise((resolve) => setTimeout(resolve, 120));
+
   const opt = {
     margin: [6, 6, 6, 6],
     filename: `solicitud-${safeFilename(title)}.pdf`,
     image: { type: "jpeg", quality: 0.98 },
     html2canvas: {
-      scale: 2,
+      scale: 1.5,
       useCORS: true,
+      allowTaint: true,
       backgroundColor: "#eef5f8",
+      logging: false,
+      scrollX: 0,
+      scrollY: 0,
+      windowWidth: 794,
+      onclone(doc) {
+        const cloned = doc.querySelector(".pdf-root");
+        if (cloned) {
+          cloned.style.opacity = "1";
+          cloned.style.left = "0";
+          cloned.style.top = "0";
+          cloned.style.position = "static";
+        }
+      },
     },
     jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
     pagebreak: { mode: ["css", "legacy"] },
   };
 
   try {
-    await window.html2pdf().set(opt).from(root).save();
+    const worker = window.html2pdf().set(opt).from(root);
+    await worker.save();
+  } catch (error) {
+    console.error(error);
+    // Fallback: abrir vista imprimible si html2pdf falla
+    const win = window.open("", "_blank", "noopener,noreferrer,width=900,height=1000");
+    if (win) {
+      win.document.write(`<!doctype html><html><head><title>${escapeHtml(title)}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+        <link rel="stylesheet" href="/styles.css?v=20260807g">
+        <style>
+          body{background:#eef5f8;margin:0;padding:18px;}
+          .pdf-root{position:static;opacity:1;left:auto;top:auto;width:auto;max-width:794px;margin:0 auto;}
+          @media print{body{background:#fff;padding:0}.pdf-root{padding:0}}
+        </style>
+      </head><body>${root.innerHTML}<script>window.onload=()=>setTimeout(()=>window.print(),400)<\\/script></body></html>`);
+      win.document.close();
+    } else {
+      throw error;
+    }
   } finally {
     root.remove();
   }

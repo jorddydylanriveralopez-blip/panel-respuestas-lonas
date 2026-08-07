@@ -390,19 +390,22 @@ pre {
 
 .pdf-root {
   position: fixed;
-  left: -10000px;
+  left: 0;
   top: 0;
   width: 794px;
   background: #eef5f8;
   color: #10233a;
   font-family: "Plus Jakarta Sans", sans-serif;
   padding: 18px;
+  opacity: 0.01;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .pdf-sheet {
   background: #ffffff;
   border-radius: 22px;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid #d7e4f0;
   box-shadow: 0 18px 40px rgba(16, 35, 58, 0.08);
 }
