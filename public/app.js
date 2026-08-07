@@ -200,7 +200,7 @@ function render() {
     <header class="topbar">
       <div>
         <p class="eyebrow">Mercadotecnia · Lonas</p>
-        <h1>Panel de solicitudes</h1>
+        <h1>Panel de <span>solicitudes</span></h1>
         <p class="subtitle">Respuestas del formulario de diseño y producción, en tiempo real.</p>
       </div>
       <div class="top-meta">
