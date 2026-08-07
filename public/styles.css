@@ -709,7 +709,7 @@ pre {
     linear-gradient(180deg, rgba(216, 246, 244, 0.55), rgba(255, 255, 255, 0.92));
 }
 
-.lona-section:nth-of-type(odd) {
+.lona-section.lona-alt {
   border-color: rgba(255, 107, 44, 0.22);
   background:
     linear-gradient(180deg, rgba(255, 228, 214, 0.5), rgba(255, 255, 255, 0.92));
@@ -719,7 +719,7 @@ pre {
   color: var(--accent-deep);
 }
 
-.lona-section:nth-of-type(odd) .lona-head h3 {
+.lona-section.lona-alt .lona-head h3 {
   color: #c2410c;
 }
 

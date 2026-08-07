@@ -248,8 +248,8 @@ function renderGroupedAnswers(questions) {
     </section>
     ${lonas
       .map(
-        (group) => `
-      <section class="fields-section lona-section">
+        (group, index) => `
+      <section class="fields-section lona-section ${index % 2 === 1 ? "lona-alt" : ""}">
         <div class="section-head lona-head">
           <h3>Lona ${group.number}</h3>
           <p>Especificaciones independientes de esta lona.</p>
