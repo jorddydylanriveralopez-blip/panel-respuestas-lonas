@@ -1,4 +1,4 @@
-const POLL_MS = 5000;
+const POLL_MS = 8000;
 const FILE_TYPES = new Set([
   "FileUpload",
   "ImagePicker",
@@ -8,12 +8,14 @@ const FILE_TYPES = new Set([
 
 const state = {
   data: null,
+  fingerprint: "",
   loading: true,
   selectedId: null,
   query: "",
   live: true,
   lastUpdated: null,
   lightbox: null,
+  booted: false,
 };
 
 let pollTimer = null;
@@ -38,6 +40,13 @@ function extractFiles(value) {
     ];
   }
   return [];
+}
+
+function hasAnswer(question) {
+  const value = question.value;
+  if (value === null || value === undefined || value === "") return false;
+  if (Array.isArray(value) && value.length === 0) return false;
+  return true;
 }
 
 function formatQuestionValue(question) {
@@ -87,7 +96,14 @@ function getQuestionByHint(questions, hints) {
 }
 
 function cleanLabel(name) {
-  return name.replace(/^\d+\.\s*/, "").replace(/<\/?p>/gi, "").trim();
+  return name.replace(/^\d+[a-z]?\.\s*/i, "").replace(/<\/?p>/gi, "").trim();
+}
+
+function cleanLonaLabel(name) {
+  return cleanLabel(name)
+    .replace(/\s*[—\-–]\s*Lona\s*\d+/gi, "")
+    .replace(/\s*\(\s*Lona\s*\d+\s*\)/gi, "")
+    .trim();
 }
 
 function formatDate(iso) {
@@ -124,6 +140,43 @@ function submissionFiles(sub) {
   });
 }
 
+function groupQuestions(questions) {
+  const general = [];
+  const byLona = new Map();
+
+  for (const question of questions) {
+    const match = question.name.match(/Lona\s*(\d+)/i);
+    if (match) {
+      const number = Number(match[1]);
+      if (!byLona.has(number)) byLona.set(number, []);
+      byLona.get(number).push(question);
+    } else {
+      general.push(question);
+    }
+  }
+
+  const lonas = [...byLona.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([number, items]) => ({
+      number,
+      questions: items.filter(hasAnswer),
+    }))
+    .filter((group) => group.questions.length > 0);
+
+  return { general, lonas };
+}
+
+function dataFingerprint(payload) {
+  const responses = payload?.responses || [];
+  return [
+    payload?.totalResponses ?? 0,
+    payload?.error || "",
+    ...responses.map(
+      (r) => `${r.submissionId}:${r.lastUpdatedAt || r.submissionTime}`,
+    ),
+  ].join("|");
+}
+
 function downloadHref(file) {
   const params = new URLSearchParams({
     url: file.url,
@@ -140,6 +193,93 @@ function safeFilename(name) {
     .trim()
     .replace(/\s+/g, "-")
     .slice(0, 60);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function renderFieldRows(questions, { stripLonaLabel = false } = {}) {
+  return questions
+    .map((question, index) => {
+      const files = isFileQuestion(question.type)
+        ? extractFiles(question.value)
+        : [];
+      const label = stripLonaLabel
+        ? cleanLonaLabel(question.name)
+        : cleanLabel(question.name);
+      return `<div class="field">
+        <dt>${escapeHtml(label)}</dt>
+        <dd>
+          ${
+            files.length
+              ? `<ul class="file-links">${files
+                  .map(
+                    (file, i) => `<li>
+                    <button type="button" data-lightbox='${escapeHtml(
+                      JSON.stringify({
+                        url: file.url,
+                        filename: file.filename || "",
+                        label,
+                      }),
+                    )}'>${escapeHtml(file.filename || `Archivo ${i + 1}`)}</button>
+                    <a href="${downloadHref(file)}">Descargar</a>
+                  </li>`,
+                  )
+                  .join("")}</ul>`
+              : escapeHtml(formatQuestionValue(question))
+          }
+        </dd>
+      </div>`;
+    })
+    .join("");
+}
+
+function renderGroupedAnswers(questions) {
+  const { general, lonas } = groupQuestions(questions);
+  return `
+    <section class="fields-section">
+      <div class="section-head"><h3>Respuestas generales</h3></div>
+      <dl class="fields">${renderFieldRows(general)}</dl>
+    </section>
+    ${lonas
+      .map(
+        (group) => `
+      <section class="fields-section lona-section">
+        <div class="section-head lona-head">
+          <h3>Lona ${group.number}</h3>
+          <p>Especificaciones independientes de esta lona.</p>
+        </div>
+        <dl class="fields">${renderFieldRows(group.questions, {
+          stripLonaLabel: true,
+        })}</dl>
+      </section>`,
+      )
+      .join("")}
+  `;
+}
+
+function renderPdfFieldRows(questions, { stripLonaLabel = false } = {}) {
+  return questions
+    .map((question, index) => {
+      const value = isFileQuestion(question.type)
+        ? extractFiles(question.value)
+            .map((f) => f.filename || "Archivo")
+            .join(", ") || "Sin archivo"
+        : formatQuestionValue(question);
+      const label = stripLonaLabel
+        ? cleanLonaLabel(question.name)
+        : cleanLabel(question.name);
+      return `<div class="pdf-field" style="${index % 2 === 1 ? "border-left-color:#ff6b2c" : ""}">
+        <dt>${escapeHtml(label)}</dt>
+        <dd>${escapeHtml(value)}</dd>
+      </div>`;
+    })
+    .join("");
 }
 
 async function imageToDataUrl(file) {
@@ -166,6 +306,7 @@ async function downloadSubmissionPdf(sub) {
 
   const title = submissionTitle(sub);
   const files = submissionFiles(sub);
+  const { general, lonas } = groupQuestions(sub.questions);
   const imageData = [];
   for (const file of files) {
     const dataUrl = await imageToDataUrl(file);
@@ -200,22 +341,17 @@ async function downloadSubmissionPdf(sub) {
         : ""
     }
 
-    <h2>Respuestas</h2>
-    <dl>
-      ${sub.questions
-        .map((question, index) => {
-          const value = isFileQuestion(question.type)
-            ? extractFiles(question.value)
-                .map((f) => f.filename || "Archivo")
-                .join(", ") || "Sin archivo"
-            : formatQuestionValue(question);
-          return `<div class="pdf-field" style="${index % 2 === 1 ? "border-left-color:#ff6b2c" : ""}">
-            <dt>${escapeHtml(cleanLabel(question.name))}</dt>
-            <dd>${escapeHtml(value)}</dd>
-          </div>`;
-        })
-        .join("")}
-    </dl>
+    <h2>Respuestas generales</h2>
+    <dl>${renderPdfFieldRows(general)}</dl>
+
+    ${lonas
+      .map(
+        (group) => `
+      <h2>Lona ${group.number}</h2>
+      <dl>${renderPdfFieldRows(group.questions, { stripLonaLabel: true })}</dl>
+    `,
+      )
+      .join("")}
   `;
 
   document.body.appendChild(root);
@@ -236,12 +372,15 @@ async function downloadSubmissionPdf(sub) {
   }
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+function updateLiveMeta() {
+  const total = document.getElementById("stat-total");
+  const updated = document.getElementById("stat-updated");
+  if (total) total.textContent = String(state.data?.totalResponses ?? 0);
+  if (updated) {
+    updated.textContent = state.lastUpdated
+      ? formatDate(state.lastUpdated)
+      : "—";
+  }
 }
 
 async function load(isInitial = false) {
@@ -249,13 +388,26 @@ async function load(isInitial = false) {
   try {
     const res = await fetch("/api/submissions", { cache: "no-store" });
     const json = await res.json();
+    const nextFingerprint = dataFingerprint(json);
+    const changed = nextFingerprint !== state.fingerprint;
+
     state.data = json;
+    state.fingerprint = nextFingerprint;
     state.lastUpdated = json.fetchedAt || new Date().toISOString();
+
     if (
       !state.selectedId ||
       !json.responses.some((r) => r.submissionId === state.selectedId)
     ) {
       state.selectedId = json.responses[0]?.submissionId || null;
+    }
+
+    state.loading = false;
+
+    if (isInitial || changed || !state.booted) {
+      render();
+    } else {
+      updateLiveMeta();
     }
   } catch {
     state.data = {
@@ -264,9 +416,10 @@ async function load(isInitial = false) {
       error: "No se pudo conectar con el servidor.",
       configured: false,
     };
-  } finally {
+    state.fingerprint = dataFingerprint(state.data);
     state.loading = false;
     render();
+  } finally {
     if (state.live) {
       clearTimeout(pollTimer);
       pollTimer = setTimeout(() => load(false), POLL_MS);
@@ -291,225 +444,12 @@ function filteredList() {
   });
 }
 
-function render() {
-  const root = document.getElementById("app");
-  const filtered = filteredList();
-  const selected =
-    filtered.find((s) => s.submissionId === state.selectedId) ||
-    filtered[0] ||
-    null;
-  const selectedImages = selected ? submissionFiles(selected) : [];
-
-  root.innerHTML = `
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">Mercadotecnia · Lonas</p>
-        <h1>Panel de <span>solicitudes</span></h1>
-        <p class="subtitle">Respuestas del formulario de diseño y producción, en tiempo real.</p>
-      </div>
-      <div class="top-meta">
-        <button type="button" class="live-pill ${state.live ? "on" : "off"}" data-action="toggle-live">
-          <span class="dot"></span>${state.live ? "En vivo" : "Pausado"}
-        </button>
-        <div class="stat">
-          <strong>${state.data?.totalResponses ?? 0}</strong>
-          <span>solicitudes</span>
-        </div>
-        <div class="stat muted">
-          <strong>${state.lastUpdated ? escapeHtml(formatDate(state.lastUpdated)) : "—"}</strong>
-          <span>última actualización</span>
-        </div>
-      </div>
-    </header>
-
-    ${
-      state.data?.error
-        ? `<div class="banner"><strong>${
-            state.data.error.includes("FILLOUT_API_KEY")
-              ? "Configuración requerida."
-              : "No se pudieron cargar las respuestas."
-          }</strong> ${escapeHtml(state.data.error)}
-          ${
-            state.data.error.includes("FILLOUT_API_KEY")
-              ? `<div class="banner-steps"><ol>
-                  <li>En Hostinger, agrega la variable <code>FILLOUT_API_KEY</code>.</li>
-                  <li>También agrega <code>FILLOUT_FORM_ID=9LnZ4jfJXnus</code>.</li>
-                  <li>Vuelve a desplegar la app.</li>
-                </ol></div>`
-              : ""
-          }
-        </div>`
-        : ""
-    }
-
-    <div class="layout">
-      <aside class="list-panel">
-        <div class="search-row">
-          <input id="search" value="${escapeHtml(state.query)}" placeholder="Buscar negocio, ejecutivo, marca…" aria-label="Buscar solicitudes" />
-        </div>
-        ${
-          state.loading && !state.data
-            ? `<p class="empty">Cargando respuestas…</p>`
-            : filtered.length === 0
-              ? `<p class="empty">${
-                  state.data?.error
-                    ? "Aún no hay datos conectados."
-                    : "No hay solicitudes que coincidan."
-                }</p>`
-              : `<ul class="submission-list">
-                  ${filtered
-                    .map((sub) => {
-                      const files = submissionFiles(sub);
-                      const active =
-                        selected?.submissionId === sub.submissionId;
-                      return `<li>
-                        <button type="button" class="submission-item ${active ? "active" : ""}" data-select="${sub.submissionId}">
-                          <div class="item-top">
-                            <h2>${escapeHtml(submissionTitle(sub))}</h2>
-                            ${files.length ? `<span class="badge">${files.length} img</span>` : ""}
-                          </div>
-                          <p>${escapeHtml(formatDate(sub.submissionTime))}</p>
-                        </button>
-                      </li>`;
-                    })
-                    .join("")}
-                </ul>`
-        }
-      </aside>
-
-      <main class="detail-panel">
-        ${
-          !selected
-            ? `<div class="empty-detail">
-                <h2>Selecciona una solicitud</h2>
-                <p>Aquí verás todos los campos y podrás abrir o descargar las imágenes adjuntas.</p>
-              </div>`
-            : `
-              <div class="detail-header">
-                <div class="detail-header-copy">
-                  <p class="eyebrow">Detalle</p>
-                  <h2>${escapeHtml(submissionTitle(selected))}</h2>
-                  <p class="meta">Enviada el ${escapeHtml(formatDate(selected.submissionTime))} · ID <code>${escapeHtml(selected.submissionId)}</code></p>
-                </div>
-                <button type="button" class="pdf-btn" data-action="download-pdf" data-id="${escapeHtml(selected.submissionId)}">
-                  Descargar PDF
-                </button>
-              </div>
-
-              ${
-                selectedImages.length
-                  ? `<section class="images-section">
-                      <div class="section-head">
-                        <h3>Imágenes adjuntas</h3>
-                        <p>Haz clic para ampliar o descarga el archivo original.</p>
-                      </div>
-                      <div class="image-grid">
-                        ${selectedImages
-                          .map(
-                            (file, index) => `
-                          <article class="image-card">
-                            <button type="button" class="thumb-btn" data-lightbox='${escapeHtml(
-                              JSON.stringify({
-                                url: file.url,
-                                filename: file.filename || "",
-                                label: file.questionName,
-                              }),
-                            )}'>
-                              <img src="${escapeHtml(file.url)}" alt="${escapeHtml(file.questionName)}" loading="lazy" />
-                            </button>
-                            <div class="image-meta">
-                              <strong>${escapeHtml(file.questionName)}</strong>
-                              <span>${escapeHtml(file.filename || "Archivo")}</span>
-                              <div class="image-actions">
-                                <button type="button" data-lightbox='${escapeHtml(
-                                  JSON.stringify({
-                                    url: file.url,
-                                    filename: file.filename || "",
-                                    label: file.questionName,
-                                  }),
-                                )}'>Ver</button>
-                                <a href="${downloadHref(file)}">Descargar</a>
-                              </div>
-                            </div>
-                          </article>`,
-                          )
-                          .join("")}
-                      </div>
-                    </section>`
-                  : ""
-              }
-
-              <section class="fields-section">
-                <div class="section-head"><h3>Respuestas</h3></div>
-                <dl class="fields">
-                  ${selected.questions
-                    .map((question) => {
-                      const files = isFileQuestion(question.type)
-                        ? extractFiles(question.value)
-                        : [];
-                      return `<div class="field">
-                        <dt>${escapeHtml(cleanLabel(question.name))}</dt>
-                        <dd>
-                          ${
-                            files.length
-                              ? `<ul class="file-links">${files
-                                  .map(
-                                    (file, i) => `<li>
-                                    <button type="button" data-lightbox='${escapeHtml(
-                                      JSON.stringify({
-                                        url: file.url,
-                                        filename: file.filename || "",
-                                        label: cleanLabel(question.name),
-                                      }),
-                                    )}'>${escapeHtml(file.filename || `Archivo ${i + 1}`)}</button>
-                                    <a href="${downloadHref(file)}">Descargar</a>
-                                  </li>`,
-                                  )
-                                  .join("")}</ul>`
-                              : escapeHtml(formatQuestionValue(question))
-                          }
-                        </dd>
-                      </div>`;
-                    })
-                    .join("")}
-                </dl>
-              </section>
-            `
-        }
-      </main>
-    </div>
-
-    ${
-      state.lightbox
-        ? `<div class="lightbox" data-action="close-lightbox">
-            <div class="lightbox-inner" data-stop>
-              <div class="lightbox-bar">
-                <div>
-                  <strong>${escapeHtml(state.lightbox.label)}</strong>
-                  <span>${escapeHtml(state.lightbox.filename || "Imagen")}</span>
-                </div>
-                <div class="lightbox-actions">
-                  <a href="${downloadHref(state.lightbox)}">Descargar</a>
-                  <button type="button" data-action="close-lightbox">Cerrar</button>
-                </div>
-              </div>
-              <img src="${escapeHtml(state.lightbox.url)}" alt="${escapeHtml(state.lightbox.label)}" />
-            </div>
-          </div>`
-        : ""
-    }
-  `;
-
+function bindEvents(root) {
   const search = document.getElementById("search");
   if (search) {
     search.addEventListener("input", (e) => {
       state.query = e.target.value;
-      render();
-      const again = document.getElementById("search");
-      if (again) {
-        again.focus();
-        again.setSelectionRange(again.value.length, again.value.length);
-      }
+      render({ keepSearchFocus: true });
     });
   }
 
@@ -569,6 +509,199 @@ function render() {
   root.querySelectorAll("[data-stop]").forEach((el) => {
     el.addEventListener("click", (e) => e.stopPropagation());
   });
+}
+
+function render(options = {}) {
+  const root = document.getElementById("app");
+  const filtered = filteredList();
+  const selected =
+    filtered.find((s) => s.submissionId === state.selectedId) ||
+    filtered[0] ||
+    null;
+  const selectedImages = selected ? submissionFiles(selected) : [];
+
+  root.innerHTML = `
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Mercadotecnia · Lonas</p>
+        <h1>Panel de <span>solicitudes</span></h1>
+        <p class="subtitle">Respuestas del formulario de diseño y producción, en tiempo real.</p>
+      </div>
+      <div class="top-meta">
+        <button type="button" class="live-pill ${state.live ? "on" : "off"}" data-action="toggle-live">
+          <span class="dot"></span>${state.live ? "En vivo" : "Pausado"}
+        </button>
+        <div class="stat">
+          <strong id="stat-total">${state.data?.totalResponses ?? 0}</strong>
+          <span>solicitudes</span>
+        </div>
+        <div class="stat muted">
+          <strong id="stat-updated">${state.lastUpdated ? escapeHtml(formatDate(state.lastUpdated)) : "—"}</strong>
+          <span>última actualización</span>
+        </div>
+      </div>
+    </header>
+
+    ${
+      state.data?.error
+        ? `<div class="banner"><strong>${
+            state.data.error.includes("FILLOUT_API_KEY")
+              ? "Configuración requerida."
+              : "No se pudieron cargar las respuestas."
+          }</strong> ${escapeHtml(state.data.error)}
+          ${
+            state.data.error.includes("FILLOUT_API_KEY")
+              ? `<div class="banner-steps"><ol>
+                  <li>En Hostinger, agrega la variable <code>FILLOUT_API_KEY</code>.</li>
+                  <li>También agrega <code>FILLOUT_FORM_ID=9LnZ4jfJXnus</code>.</li>
+                  <li>Vuelve a desplegar la app.</li>
+                </ol></div>`
+              : ""
+          }
+        </div>`
+        : ""
+    }
+
+    <div class="layout">
+      <aside class="list-panel">
+        <div class="search-row">
+          <input id="search" value="${escapeHtml(state.query)}" placeholder="Buscar negocio, ejecutivo, marca…" aria-label="Buscar solicitudes" />
+        </div>
+        ${
+          state.loading && !state.data
+            ? `<p class="empty">Cargando respuestas…</p>`
+            : filtered.length === 0
+              ? `<p class="empty">${
+                  state.data?.error
+                    ? "Aún no hay datos conectados."
+                    : "No hay solicitudes que coincidan."
+                }</p>`
+              : `<ul class="submission-list">
+                  ${filtered
+                    .map((sub) => {
+                      const files = submissionFiles(sub);
+                      const { lonas } = groupQuestions(sub.questions);
+                      const active =
+                        selected?.submissionId === sub.submissionId;
+                      return `<li>
+                        <button type="button" class="submission-item ${active ? "active" : ""}" data-select="${sub.submissionId}">
+                          <div class="item-top">
+                            <h2>${escapeHtml(submissionTitle(sub))}</h2>
+                            <div class="item-badges">
+                              ${lonas.length > 1 ? `<span class="badge badge-lona">${lonas.length} lonas</span>` : ""}
+                              ${files.length ? `<span class="badge">${files.length} img</span>` : ""}
+                            </div>
+                          </div>
+                          <p>${escapeHtml(formatDate(sub.submissionTime))}</p>
+                        </button>
+                      </li>`;
+                    })
+                    .join("")}
+                </ul>`
+        }
+      </aside>
+
+      <main class="detail-panel">
+        ${
+          !selected
+            ? `<div class="empty-detail">
+                <h2>Selecciona una solicitud</h2>
+                <p>Aquí verás todos los campos y podrás abrir o descargar las imágenes adjuntas.</p>
+              </div>`
+            : `
+              <div class="detail-header">
+                <div class="detail-header-copy">
+                  <p class="eyebrow">Detalle</p>
+                  <h2>${escapeHtml(submissionTitle(selected))}</h2>
+                  <p class="meta">Enviada el ${escapeHtml(formatDate(selected.submissionTime))} · ID <code>${escapeHtml(selected.submissionId)}</code></p>
+                </div>
+                <button type="button" class="pdf-btn" data-action="download-pdf" data-id="${escapeHtml(selected.submissionId)}">
+                  Descargar PDF
+                </button>
+              </div>
+
+              ${
+                selectedImages.length
+                  ? `<section class="images-section">
+                      <div class="section-head">
+                        <h3>Imágenes adjuntas</h3>
+                        <p>Haz clic para ampliar o descarga el archivo original.</p>
+                      </div>
+                      <div class="image-grid">
+                        ${selectedImages
+                          .map(
+                            (file) => `
+                          <article class="image-card">
+                            <button type="button" class="thumb-btn" data-lightbox='${escapeHtml(
+                              JSON.stringify({
+                                url: file.url,
+                                filename: file.filename || "",
+                                label: file.questionName,
+                              }),
+                            )}'>
+                              <img src="${escapeHtml(file.url)}" alt="${escapeHtml(file.questionName)}" loading="lazy" />
+                            </button>
+                            <div class="image-meta">
+                              <strong>${escapeHtml(file.questionName)}</strong>
+                              <span>${escapeHtml(file.filename || "Archivo")}</span>
+                              <div class="image-actions">
+                                <button type="button" data-lightbox='${escapeHtml(
+                                  JSON.stringify({
+                                    url: file.url,
+                                    filename: file.filename || "",
+                                    label: file.questionName,
+                                  }),
+                                )}'>Ver</button>
+                                <a href="${downloadHref(file)}">Descargar</a>
+                              </div>
+                            </div>
+                          </article>`,
+                          )
+                          .join("")}
+                      </div>
+                    </section>`
+                  : ""
+              }
+
+              ${renderGroupedAnswers(selected.questions)}
+            `
+        }
+      </main>
+    </div>
+
+    ${
+      state.lightbox
+        ? `<div class="lightbox" data-action="close-lightbox">
+            <div class="lightbox-inner" data-stop>
+              <div class="lightbox-bar">
+                <div>
+                  <strong>${escapeHtml(state.lightbox.label)}</strong>
+                  <span>${escapeHtml(state.lightbox.filename || "Imagen")}</span>
+                </div>
+                <div class="lightbox-actions">
+                  <a href="${downloadHref(state.lightbox)}">Descargar</a>
+                  <button type="button" data-action="close-lightbox">Cerrar</button>
+                </div>
+              </div>
+              <img src="${escapeHtml(state.lightbox.url)}" alt="${escapeHtml(state.lightbox.label)}" />
+            </div>
+          </div>`
+        : ""
+    }
+  `;
+
+  bindEvents(root);
+
+  if (options.keepSearchFocus) {
+    const again = document.getElementById("search");
+    if (again) {
+      again.focus();
+      again.setSelectionRange(again.value.length, again.value.length);
+    }
+  }
+
+  state.booted = true;
+  root.classList.add("is-booted");
 }
 
 load(true);
