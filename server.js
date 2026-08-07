@@ -82,8 +82,19 @@ app.get("/api/download", async (req, res) => {
   }
 });
 
-app.use(express.static(path.join(__dirname, "public")));
-
+app.use(
+  express.static(path.join(__dirname, "public"), {
+    etag: false,
+    lastModified: false,
+    setHeaders(res, filePath) {
+      if (filePath.endsWith(".html")) {
+        res.setHeader("Cache-Control", "no-store");
+      } else if (filePath.endsWith(".css") || filePath.endsWith(".js")) {
+        res.setHeader("Cache-Control", "no-cache, must-revalidate");
+      }
+    },
+  }),
+);
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
